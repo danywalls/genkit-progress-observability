@@ -1,0 +1,22 @@
+{
+  "name": "genkit-progress-observability",
+  "version": "1.0.0",
+  "description": "Agentic Family Travel Planner with Genkit + Progress AI Observability",
+  "type": "module",
+  "scripts": {
+    "start": "tsx bootstrap.ts",
+    "dev": "tsx watch bootstrap.ts"
+  },
+  "dependencies": {
+    "@genkit-ai/google-genai": "^1.4.0",
+    "@progress/observability": "latest",
+    "dotenv": "^16.4.7",
+    "genkit": "^1.4.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
