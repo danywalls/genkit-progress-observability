@@ -1,4 +1,3 @@
-import { Observability } from '@progress/observability';
 import { planTrip } from './agent.js';
 
 function parseArgs() {
@@ -65,12 +64,8 @@ async function main() {
     console.log(`TOTAL ESTIMATED COST: ${plan.totalEstimatedCost}`);
     console.log('='.repeat(60));
 
-    console.log('\nCheck your traces at: https://observability.progress.com');
-
   } catch (error) {
     console.error('Error generating travel plan:', error);
-  } finally {
-    await Observability.shutdown();
   }
 }
 

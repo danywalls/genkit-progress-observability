@@ -1,7 +1,5 @@
-import { wrapFunctionWithSpan, ObservabilitySpanKind } from '@progress/observability';
 import { genkit, z } from 'genkit';
 import { googleAI } from '@genkit-ai/google-genai';
-import { recordModelUsageSpan } from './observability-usage.js';
 import { getFlightsForDestination, FlightSchema } from './tools/flights.js';
 import { getHotelsForDestination, HotelSchema } from './tools/hotels.js';
 import { getActivitiesForDestination, ActivitySchema } from './tools/activities.js';
@@ -188,16 +186,7 @@ IMPORTANT:
     throw new Error('Failed to generate travel plan');
   }
 
-  recordModelUsageSpan(modelName, finalResult.usage);
-
   return finalResult.output;
 }
 
-export const planTrip = wrapFunctionWithSpan(
-  planTripRaw,
-  'family-travel-agent',
-  {
-    spanKind: ObservabilitySpanKind.AGENT,
-    tags: ['travel', 'family', 'genkit'],
-  }
-) as typeof planTripRaw;
+export const planTrip = planTripRaw;
