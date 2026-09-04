@@ -45,6 +45,9 @@ Traces are sent to Progress Observability Platform automatically. Open [observab
 - Token usage and cost analytics
 - Prompt/response content (when `traceContent: true`)
 
+Genkit model spans and model usage are captured by the native Genkit support
+included in `@progress/observability@3.1.0`. No manual token adapter is needed.
+
 
 
 ## License
