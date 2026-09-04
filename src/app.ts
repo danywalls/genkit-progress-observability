@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { planTrip } from './agent.js';
 
 function parseArgs() {
@@ -21,7 +22,7 @@ function parseArgs() {
 async function main() {
   const { destination, numAdults, numKids, kidAges, budget } = parseArgs();
 
-  console.log('Ibiza Family Travel Planner - Genkit + Progress Observability\n');
+  console.log('Ibiza Family Travel Planner - Genkit\n');
   console.log('='.repeat(60));
 
   try {
