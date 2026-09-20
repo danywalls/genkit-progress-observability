@@ -1,11 +1,11 @@
 import { genkit, z } from 'genkit';
 import { googleAI } from '@genkit-ai/google-genai';
 import { getFlightsForDestination, FlightSchema } from './tools/flights.js';
-import { getHotelsForDestination, HotelSchema } from './tools/hotels.js';
+import { getHotelsDefensive, HotelResponseSchema } from './tools/hotels.js';
 import { getActivitiesForDestination, ActivitySchema } from './tools/activities.js';
 
 const normalizeModelName = (value: string | undefined): string => {
-  const candidate = value?.trim() ?? 'gemini-2.5-flash-lite';
+  const candidate = value?.trim() ?? 'gemini-3.5-flash-lite';
   const withoutProvider = candidate.replace(/^googleai\//i, '');
   return `googleai/${withoutProvider}`;
 };
@@ -65,23 +65,24 @@ const findFlightsTool = ai.defineTool(
 const findHotelsTool = ai.defineTool(
   {
     name: 'find-hotels',
-    description: 'Search for family-friendly hotels at a destination.',
+    description: 'Search for family-friendly hotels at a destination with optional budget limits.',
     inputSchema: z.object({
       destination: z.string(),
-      checkIn: z.string(),
-      checkOut: z.string(),
+      checkIn: z.string().optional().describe('Check-in date (YYYY-MM-DD)'),
+      checkOut: z.string().optional().describe('Check-out date (YYYY-MM-DD)'),
+      maxBudgetPerNight: z.number().optional().describe('Maximum budget per night in euros'),
     }),
-    outputSchema: z.array(HotelSchema),
+    outputSchema: HotelResponseSchema,
   },
-  async ({ destination, checkIn, checkOut }) => {
-    console.log(`[tool:find-hotels] Searching hotels in ${destination} from ${checkIn} to ${checkOut}`);
-    const checkInDate = new Date(checkIn);
-    const checkOutDate = new Date(checkOut);
-    const nightCount = Number.isFinite(checkInDate.getTime()) && Number.isFinite(checkOutDate.getTime())
+  async ({ destination, checkIn, checkOut, maxBudgetPerNight }) => {
+    console.log(`[tool:find-hotels] Searching hotels in ${destination} (budget: ${maxBudgetPerNight ?? 'unspecified'})`);
+    const checkInDate = checkIn ? new Date(checkIn) : undefined;
+    const checkOutDate = checkOut ? new Date(checkOut) : undefined;
+    const nightCount = checkInDate && checkOutDate && Number.isFinite(checkInDate.getTime()) && Number.isFinite(checkOutDate.getTime())
       ? Math.max(1, Math.round((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)))
       : 3;
 
-    return getHotelsForDestination(destination, nightCount);
+    return getHotelsDefensive(destination, nightCount, maxBudgetPerNight);
   }
 );
 
@@ -170,6 +171,7 @@ IMPORTANT:
       findHotelsTool,
       findActivitiesTool,
     ],
+    maxTurns: 4, // Production guardrail: prevents runaway reasoning loops
     output: { schema: TravelPlanSchema },
   });
 

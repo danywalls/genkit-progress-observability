@@ -1,4 +1,4 @@
-import { Observability } from '@progress/observability';
+import { Observability, propagateAttributes } from '@progress/observability';
 import { planTrip } from './agent.js';
 
 function parseArgs() {
@@ -22,18 +22,36 @@ function parseArgs() {
 async function main() {
   const { destination, numAdults, numKids, kidAges, budget } = parseArgs();
 
+  // Simulated session metadata for the current user
+  const session = {
+    userId: process.env.USER_ID ?? 'usr_4102',
+    tier: (process.env.USER_TIER ?? 'vip') as 'standard' | 'vip' | 'enterprise',
+  };
+
   console.log('Ibiza Family Travel Planner - Genkit + Progress Observability\n');
   console.log('='.repeat(60));
 
   try {
-    console.log(`\nPlanning a family trip to ${destination}...\n`);
+    console.log(`\nPlanning a family trip to ${destination} for user ${session.userId} (${session.tier} tier)...\n`);
 
-    const plan = await planTrip(
-      destination,
-      numAdults,
-      numKids,
-      kidAges,
-      budget
+    // Propagate business tags across all child spans in this execution
+    const plan = await propagateAttributes(
+      [
+        `user:${session.userId}`,
+        `tier:${session.tier}`,
+        `destination:${destination}`,
+        `family-size:${numAdults + numKids}`,
+        `budget:${budget}`,
+      ],
+      async () => {
+        return await planTrip(
+          destination,
+          numAdults,
+          numKids,
+          kidAges,
+          budget
+        );
+      }
     );
 
     console.log('\n' + '='.repeat(60));
