@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@genkit-ai/google-genai": "^1.4.0",
-    "@progress/observability": "3.1.0",
+    "@progress/observability": "^3.1.1",
     "dotenv": "^16.4.7",
     "genkit": "^1.4.0",
     "zod": "^3.24.0"
