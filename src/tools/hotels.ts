@@ -1,3 +1,4 @@
+import { wrapFunctionWithSpan, ObservabilitySpanKind } from '@progress/observability';
 import { z } from 'zod';
 
 export const HotelSchema = z.object({
@@ -27,6 +28,104 @@ export function normalizeDestination(destination: string): string {
 
   return 'default';
 }
+
+/**
+ * Raw vendor response representation (simulating heavy 20+ KB external payloads).
+ */
+export interface RawExternalHotel {
+  id: string;
+  internal_sku: string;
+  display_name: string;
+  stars: number;
+  price_eur: number;
+  cancellation_policy_html: string;
+  tax_breakdown: Record<string, number>;
+  image_urls: string[];
+  room_variants: Array<{ code: string; available: number }>;
+  amenities: string[];
+  affiliate_tracking_url: string;
+}
+
+/**
+ * Sanitized, lightweight DTO for the LLM context.
+ */
+export interface CleanHotelDTO {
+  name: string;
+  rating: number;
+  pricePerNight: string;
+  keyAmenities: string[];
+}
+
+/**
+ * Trims oversized third-party payloads to prevent token leaks.
+ */
+export function sanitizeHotelResults(
+  rawList: RawExternalHotel[],
+  limit = 3
+): CleanHotelDTO[] {
+  return rawList.slice(0, limit).map((hotel) => ({
+    name: hotel.display_name,
+    rating: hotel.stars,
+    pricePerNight: `€${hotel.price_eur}`,
+    keyAmenities: hotel.amenities.slice(0, 4),
+  }));
+}
+
+/**
+ * Instrument internal tool logic with a dedicated child span using the Progress SDK
+ */
+export const sanitizeHotelPayloadTraced = wrapFunctionWithSpan(
+  sanitizeHotelResults,
+  'sanitize-hotel-payload',
+  {
+    spanKind: ObservabilitySpanKind.TASK,
+    tags: ['operation:payload-sanitization'],
+  }
+);
+
+const MOCK_RAW_HOTELS: Record<string, RawExternalHotel[]> = {
+  ibiza: [
+    {
+      id: 'vnd_ibz_001',
+      internal_sku: 'HOTEL-TAL-01',
+      display_name: 'Hotel Talamanca',
+      stars: 4,
+      price_eur: 165,
+      cancellation_policy_html: '<p>Free cancellation up to 48 hours before check-in...</p>',
+      tax_breakdown: { vat: 16.5, city_tax: 3.3 },
+      image_urls: ['https://cdn.example.com/photo1.jpg', 'https://cdn.example.com/photo2.jpg'],
+      room_variants: [{ code: 'DLX-01', available: 3 }],
+      amenities: ['Beach access', 'Kids pool', 'Restaurant', 'Free WiFi', 'Buffet breakfast', 'Spa'],
+      affiliate_tracking_url: 'https://affiliate.example.com/track?click=123',
+    },
+    {
+      id: 'vnd_ibz_002',
+      internal_sku: 'RESORT-PDB-02',
+      display_name: 'Playa den Bossa Family Resort',
+      stars: 4,
+      price_eur: 195,
+      cancellation_policy_html: '<p>Non-refundable rate</p>',
+      tax_breakdown: { vat: 19.5, city_tax: 3.9 },
+      image_urls: ['https://cdn.example.com/photo3.jpg'],
+      room_variants: [{ code: 'STE-02', available: 1 }],
+      amenities: ['Private beach', 'Kids club', 'Pool', 'All-inclusive option', 'Tennis court'],
+      affiliate_tracking_url: 'https://affiliate.example.com/track?click=456',
+    },
+    {
+      id: 'vnd_ibz_003',
+      internal_sku: 'HOSTAL-TORRE-03',
+      display_name: 'Hostal La Torre',
+      stars: 3,
+      price_eur: 110,
+      cancellation_policy_html: '<p>Standard cancellation</p>',
+      tax_breakdown: { vat: 11.0, city_tax: 2.2 },
+      image_urls: ['https://cdn.example.com/photo5.jpg'],
+      room_variants: [{ code: 'STD-03', available: 4 }],
+      amenities: ['Sea view terrace', 'Free WiFi', 'Breakfast included', 'Bar'],
+      affiliate_tracking_url: 'https://affiliate.example.com/track?click=789',
+    },
+  ],
+};
 
 const MOCK_HOTELS: Record<string, Hotel[]> = {
   'ibiza': [
@@ -81,6 +180,19 @@ const MOCK_HOTELS: Record<string, Hotel[]> = {
 
 export function getHotelsForDestination(destination: string, stayNights = 3): Hotel[] {
   const key = normalizeDestination(destination);
+  const rawList = MOCK_RAW_HOTELS[key];
+
+  if (rawList && rawList.length > 0) {
+    const cleanDtos = (sanitizeHotelPayloadTraced as typeof sanitizeHotelResults)(rawList, 3);
+    return cleanDtos.map((dto) => ({
+      name: dto.name,
+      rating: dto.rating,
+      pricePerNight: dto.pricePerNight,
+      amenities: dto.keyAmenities,
+      familyFriendly: true,
+    }));
+  }
+
   const hotels = MOCK_HOTELS[key] ?? MOCK_HOTELS.default;
 
   if (stayNights < 2) {
@@ -125,46 +237,4 @@ export function getHotelsDefensive(
     message: `Found ${hotels.length} family-friendly hotel options in ${destination}.`,
     results: hotels,
   };
-}
-
-/**
- * Raw vendor response representation (simulating heavy 20+ KB external payloads).
- */
-export interface RawExternalHotel {
-  id: string;
-  internal_sku: string;
-  display_name: string;
-  stars: number;
-  price_eur: number;
-  cancellation_policy_html: string;
-  tax_breakdown: Record<string, number>;
-  image_urls: string[];
-  room_variants: Array<{ code: string; available: number }>;
-  amenities: string[];
-  affiliate_tracking_url: string;
-}
-
-/**
- * Sanitized, lightweight DTO for the LLM context.
- */
-export interface CleanHotelDTO {
-  name: string;
-  rating: number;
-  pricePerNight: string;
-  keyAmenities: string[];
-}
-
-/**
- * Trims oversized third-party payloads to prevent token leaks.
- */
-export function sanitizeHotelResults(
-  rawList: RawExternalHotel[],
-  limit = 3
-): CleanHotelDTO[] {
-  return rawList.slice(0, limit).map((hotel) => ({
-    name: hotel.display_name,
-    rating: hotel.stars,
-    pricePerNight: `€${hotel.price_eur}`,
-    keyAmenities: hotel.amenities.slice(0, 4),
-  }));
 }

@@ -4,7 +4,8 @@ import { AsyncLocalStorageContextManager } from '@opentelemetry/context-async-ho
 import { context } from '@opentelemetry/api';
 import { propagateAttributes, getContextTags } from '@progress/observability';
 import { maskName, sanitizeUserNotes } from '../src/utils/privacy.js';
-import { getHotelsDefensive, sanitizeHotelResults, RawExternalHotel } from '../src/tools/hotels.js';
+import { getHotelsDefensive, sanitizeHotelResults, sanitizeHotelPayloadTraced, RawExternalHotel } from '../src/tools/hotels.js';
+import { BookingService } from '../src/services/booking.js';
 
 describe('Advanced Observability & Production Guardrails', () => {
   before(() => {
@@ -100,6 +101,44 @@ describe('Advanced Observability & Production Guardrails', () => {
 
       assert.ok(result.includes('user:usr_4102'));
       assert.ok(result.includes('tier:vip'));
+    });
+  });
+
+  describe('Standalone Function Tracing with wrapFunctionWithSpan', () => {
+    it('executes wrapped payload sanitization and returns clean DTOs', () => {
+      const bloatedRawList: RawExternalHotel[] = [
+        {
+          id: 'vnd_ibz_001',
+          internal_sku: 'HOTEL-TAL-01',
+          display_name: 'Hotel Talamanca',
+          stars: 4,
+          price_eur: 165,
+          cancellation_policy_html: '<p>Free cancellation</p>',
+          tax_breakdown: { vat: 16.5 },
+          image_urls: ['https://cdn.example.com/photo1.jpg'],
+          room_variants: [{ code: 'DLX-01', available: 3 }],
+          amenities: ['Beach access', 'Kids pool', 'Free WiFi', 'Buffet breakfast'],
+          affiliate_tracking_url: 'https://affiliate.example.com/track?click=123',
+        },
+      ];
+
+      const sanitized = (sanitizeHotelPayloadTraced as typeof sanitizeHotelResults)(bloatedRawList, 1);
+      assert.equal(sanitized.length, 1);
+      assert.equal(sanitized[0].name, 'Hotel Talamanca');
+      assert.equal(sanitized[0].rating, 4);
+      assert.equal(sanitized[0].pricePerNight, '€165');
+      assert.equal((sanitized[0] as any).cancellation_policy_html, undefined);
+    });
+  });
+
+  describe('Internal Service Instrumentation (@workflow and @task)', () => {
+    it('executes decorated booking workflow and confirms reservation', async () => {
+      const service = new BookingService();
+      const confirmation = await service.bookHotel('usr_4102', 'hotel_talamanca_01');
+
+      assert.equal(confirmation.status, 'CONFIRMED');
+      assert.equal(confirmation.hotelId, 'hotel_talamanca_01');
+      assert.match(confirmation.reservationId, /^RES-\d+/);
     });
   });
 });
