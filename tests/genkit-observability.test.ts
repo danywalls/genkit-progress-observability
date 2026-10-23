@@ -3,23 +3,34 @@ import assert from 'node:assert/strict';
 
 import { GenkitSpanProcessor } from '@progress/observability';
 
+function createMockSpan(attributes: Record<string, any>, name = 'test', spanId = '0000000000000001', traceId = '00000000000000000000000000000001') {
+  return {
+    name,
+    attributes,
+    spanContext: () => ({
+      traceId,
+      spanId,
+      traceFlags: 1,
+    }),
+    parentSpanContext: undefined,
+  };
+}
+
 describe('native Genkit observability support', () => {
   it('maps Genkit model usage to standard model attributes', () => {
-    const span = {
-      attributes: {
-        'genkit:type': 'trace',
-        'genkit:metadata:subtype': 'model',
-        'genkit:name': 'googleai/gemini-2.5-flash-lite',
-        'genkit:output': JSON.stringify({
-          usage: {
-            inputTokens: 42,
-            outputTokens: 17,
-            totalTokens: 59,
-            thoughtsTokens: 3,
-          },
-        }),
-      },
-    };
+    const span = createMockSpan({
+      'genkit:type': 'trace',
+      'genkit:metadata:subtype': 'model',
+      'genkit:name': 'googleai/gemini-2.5-flash-lite',
+      'genkit:output': JSON.stringify({
+        usage: {
+          inputTokens: 42,
+          outputTokens: 17,
+          totalTokens: 59,
+          thoughtsTokens: 3,
+        },
+      }),
+    });
 
     new GenkitSpanProcessor().onEnd(span as any);
 
@@ -32,22 +43,22 @@ describe('native Genkit observability support', () => {
   });
 
   it('maps root generate action to agent span kind with provider and model attributes', () => {
-    const span = {
-      attributes: {
-        'genkit:type': 'action',
-        'genkit:metadata:subtype': 'util',
-        'genkit:name': 'generate',
-        'genkit:input': JSON.stringify({
-          model: 'googleai/gemini-2.5-flash-lite',
-        }),
-      },
-    };
+    const span = createMockSpan({
+      'genkit:type': 'action',
+      'genkit:metadata:subtype': 'util',
+      'genkit:name': 'generate',
+      'genkit:input': JSON.stringify({
+        model: 'googleai/gemini-2.5-flash-lite',
+      }),
+    });
 
     new GenkitSpanProcessor().onEnd(span as any);
 
-    assert.equal(span.attributes['traceloop.span.kind'], 'agent');
+    assert.equal(span.attributes['observability.span.kind'], 'agent');
     assert.equal(span.attributes['gen_ai.provider.name'], 'Google');
     assert.equal(span.attributes['gen_ai.request.model'], 'gemini-2.5-flash-lite');
     assert.equal(span.attributes['gen_ai.response.model'], 'gemini-2.5-flash-lite');
   });
 });
+
+
